@@ -1,0 +1,284 @@
+/*
+main file name : pk0050Company.pgc
+
+This progream takes 4 argument, add/subtract , ssn, pno and hours
+ and gives the information of the employee acorrdingly
+ (also adds/subtracts the working hours of employee according to the given argument).  
+
+Submitted by : Pooja Khanal, A25288740 CS687 Spring 2020, 03/23/2020
+
+*/
+
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <getopt.h>
+
+
+EXEC SQL BEGIN DECLARE SECTION;
+	
+
+	// variables from employee table 
+ 	char fname[15];
+	char lname[15];
+	char minit[1];
+	char ssn[9];
+	char address[30];
+	char sex[1];
+	float salary;
+
+	//variables for department and department locations
+	char dname[15];
+	int dnumber;
+	char dlocation[15];
+
+	//variables for project 
+	int pno;
+	char pname[16];
+	char plocation[15];
+
+	// variables for works_on
+	float hours = 0;
+
+	// variables for dependent
+	char dependent_name[15];
+	char relationship[8];
+
+	//variables needed for our computation
+	float avgSalary;
+	float diffSalary;
+	int noOfDependent;
+	char input_ssn[9];
+	int input_pno;
+	float input_hours ;
+	char input_option='o';
+	float sum_hours = 0;
+
+EXEC SQL END DECLARE SECTION;
+EXEC SQL WHENEVER SQLERROR CALL print_sqlca();
+
+// SQL Error handling 
+void print_sqlca() {
+    //fprintf(stderr, "==== sqlca ====\n");
+    //fprintf(stderr, "sqlcode: %ld\n", sqlca.sqlcode);
+    //fprintf(stderr, "sqlerrm.sqlerrml: %d\n", sqlca.sqlerrm.sqlerrml);
+    //fprintf(stderr, "sqlerrm.sqlerrmc: %s\n", sqlca.sqlerrm.sqlerrmc);
+    //fprintf(stderr, "sqlerrd: %ld %ld %ld %ld %ld %ld\n", sqlca.sqlerrd[0],sqlca.sqlerrd[1],sqlca.sqlerrd[2],
+    //                                                      sqlca.sqlerrd[3],sqlca.sqlerrd[4],sqlca.sqlerrd[5]);
+    //fprintf(stderr, "sqlwarn: %d %d %d %d %d %d %d %d\n", sqlca.sqlwarn[0], sqlca.sqlwarn[1], sqlca.sqlwarn[2],
+    //                                                      sqlca.sqlwarn[3], sqlca.sqlwarn[4], sqlca.sqlwarn[5],
+    //                                                      sqlca.sqlwarn[6], sqlca.sqlwarn[7]);
+    //fprintf(stderr, "sqlstate: %5s\n", sqlca.sqlstate);
+    //fprintf(stderr, "===============\n");
+    fprintf(stderr, "ERROR: %s\n", sqlca.sqlerrm.sqlerrmc);
+}
+
+// function prototype
+void populate(void);
+void getDetails(void);
+void addition(void);
+void subtraction(void);
+void handleCommandLineArguments();
+
+void main(int argc, char* argv[]){ 
+	
+	printf("\n\nSubmitted by Pooja Khanal(pk0050)\n\n");		
+	handleCommandLineArguments(argc, argv);
+	EXEC SQL CONNECT TO cs687 AS con1 USER "pk0050" IDENTIFIED BY "687studentspring2020";
+	populate();
+	if (input_option == 'a') {
+		addition();
+	} else {
+		subtraction();
+	}
+	getDetails();
+	EXEC SQL DISCONNECT ALL;
+}
+
+void handleCommandLineArguments(int argc, char* argv[]) {
+	int  c;
+	input_pno = -1, input_hours = -1;
+	strcpy(input_ssn, "");
+
+
+	// get the command line parameters
+  	const char * short_opt = "ams:p:h:";
+   	struct option long_opt[] =
+   	{
+     		{"add",		 no_argument,       NULL, 	'a'},
+      		{"subtract",	 no_argument,	 NULL, 		'm'},
+		{"ssn",		required_argument,	 NULL, 	's'},
+		{"pno",         required_argument,       NULL,  'p'},
+		{"hours",         required_argument,       NULL,  'h'},
+      		{NULL,            0,                 NULL, 0  }
+   	};
+
+	while((c = getopt_long_only(argc, argv, short_opt, long_opt, 0)) != -1)
+  	 {
+     		 switch(c)
+     		 {
+         		 case -1:       /* no more arguments */
+        		 case 0:        /* long options toggles */
+				 break;
+
+        		 case 'a':
+				input_option = 'a';
+				 break;
+
+			case 'm':
+				input_option = 'm';
+				break;
+			
+			case 's':
+				strcpy(input_ssn, optarg);
+				break;
+
+			case 'p':
+				input_pno = atoi(optarg);
+				break;
+
+			case 'h':
+				input_hours= (float)atoi(optarg);
+				break;
+
+        		 case ':':
+        		 case '?':
+				 fprintf(stderr, "Unkown argument %s\n", argv[0]);
+				break;
+
+        		 default:
+				 fprintf(stderr, "%s: invalid option -- %c\n", argv[0], c);
+     		 };
+  	 };
+
+	if ((input_option != 'a' && input_option != 'm') || input_pno == -1 || input_hours < 0 || input_ssn == "") {
+		printf("All arguments not supplied or arguments are not valid");
+		exit(1);
+	}
+
+}
+
+
+void populate(){
+	EXEC SQL 
+		SELECT EMPLOYEE.fname, EMPLOYEE.minit, EMPLOYEE.lname, EMPLOYEE.ssn, EMPLOYEE.salary,
+			DEPARTMENT.dname, DEPARTMENT.dnumber, PROJECT.pname
+		INTO :fname, :minit, :lname, :ssn, :salary, :dname, :dnumber, :pname
+		FROM pk0050.EMPLOYEE, pk0050.DEPARTMENT, pk0050.PROJECT
+		WHERE EMPLOYEE.dno = DEPARTMENT.dnumber AND EMPLOYEE.ssn = :input_ssn AND 
+			PROJECT.pnumber = :input_pno;
+	
+	EXEC SQL 
+		SELECT WORKS_ON.hours
+		INTO :hours
+		FROM pk0050.WORKS_ON
+		WHERE WORKS_ON.essn = :input_ssn AND WORKS_ON.pno = :input_pno;
+}	
+
+
+
+
+void addition(){
+	if (hours <=0) {
+		printf("%s %s does not work on the project %s.\n",fname,lname,pname);
+		printf("Employee %s %s started to work on project %s for %.1f hours.\n",fname,lname,pname,input_hours);
+		EXEC SQL INSERT INTO pk0050.WORKS_ON("essn", "pno", "hours")
+	                VALUES (:input_ssn, :input_pno, :input_hours);
+                EXEC SQL COMMIT;	
+	}
+	else {
+		input_hours += hours;
+		printf ("The number of hours worked on project %s by %s %s is %.1f.\n",pname,fname,lname,hours);
+		printf("The number of hours worked on project %s by employee %s %s increased from %.1f hours to %.1f hours.\n",pname,fname,lname,hours,input_hours);
+		EXEC SQL UPDATE pk0050.WORKS_ON SET hours = :input_hours 
+			WHERE essn = :input_ssn and pno= :input_pno; 	
+		EXEC SQL COMMIT;
+
+	}
+	hours = input_hours;
+}
+
+void subtraction(){
+	if ( hours <=0){
+		printf("%s %s does not work on project %s.\n",fname, lname, pname);	
+	}else {
+		input_hours = hours - input_hours > 0 ? hours - input_hours : 0;
+		if (input_hours > 0) {
+			printf("The number of hours worked on project %s by employee %s %s is reduced from %.1f hours to %.1f hours.\n",fname,lname,pname,hours, input_hours);
+		} else {
+			printf(" Employee %s %s used to work on project %s for %.1f hours. The employee stopped working on this project.", fname, lname, pname, hours);	
+		}
+		EXEC SQL UPDATE pk0050.WORKS_ON SET hours = :input_hours WHERE essn = :input_ssn and pno = :input_pno;
+		EXEC SQL DELETE FROM pk0050.works_on WHERE hours <= 0 ;
+		EXEC SQL COMMIT;
+		hours = input_hours;
+	}
+}
+
+void getDetails(){
+
+	printf("\n\n\n Printing the details after updating\n\n\n");
+
+	//project number and hours the employee is working on
+	EXEC SQL DECLARE employees CURSOR FOR
+    		SELECT
+     			 WORKS_ON.pno, PROJECT.pname, WORKS_ON.hours 
+   		 FROM 
+     			 pk0050.WORKS_ON, pk0050.PROJECT
+		WHERE 
+			WORKS_ON.essn = :input_ssn AND PROJECT.pnumber = WORKS_ON.pno;
+  	EXEC SQL OPEN employees;
+	EXEC SQL WHENEVER NOT FOUND DO BREAK;
+		
+	while(1){
+		EXEC SQL FETCH employees
+			INTO 
+				:pno, :pname, :hours;
+		printf("Employee %s %s works on project %s having pnumber %d for %.1f hours.\n",fname,lname,pname,pno,hours);
+		sum_hours += hours;
+	}
+	EXEC SQL WHENEVER NOT FOUND CONTINUE;
+	EXEC SQL CLOSE employees; 
+		
+	
+
+
+	// display the name of his/her department 
+	
+	printf("%s %s is associated with  %s department.\n",fname,lname,dname);
+
+	//total hours worked by the employee including all projects 
+	if ( hours > 0) {
+		printf("%s %s works for total of %.1f hours.\n",fname, lname,sum_hours);	
+	}
+		
+
+	//number of his/her dependent 
+	EXEC SQL SELECT count(DISTINCT DEPENDENT.dependent_name) INTO :noOfDependent
+		FROM pk0050.WORKS_ON, pk0050.DEPENDENT 
+		WHERE WORKS_ON.essn = DEPENDENT.essn AND WORKS_ON.essn = :input_ssn;
+	printf("The number of Dependents of %s %s is %d.\n",fname, lname, noOfDependent);
+
+	//his/her salary
+	printf("%s %s's salary is %.3f.\n",fname,lname, salary);
+
+	//average salary in his/her depertment 
+	EXEC SQL SELECT AVG(EMPLOYEE.salary) INTO :avgSalary 
+		FROM pk0050.EMPLOYEE 
+		WHERE  EMPLOYEE.dno = :dnumber;
+	printf("The average salary for the %s department is %.3f.\n",dname,avgSalary);
+
+	
+	// difference between his/her salary and average salary in his/her department
+	diffSalary = avgSalary - salary;
+	if ( diffSalary < 0.0){
+		diffSalary *= -1;
+	}
+
+	printf("The difference between the average salary of the %s department and %s %s's salary is %.3f.\n",dname,fname,lname,diffSalary);
+ }
+	
+
+	
+
